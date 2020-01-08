@@ -1,0 +1,4 @@
+.mypy_cache
+*.pdf
+*.bak
+__pycache__
