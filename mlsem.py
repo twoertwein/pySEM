@@ -1,5 +1,3 @@
-# standard errors and model fit
-# Bayesian?
 import warnings
 from typing import (
     Any,

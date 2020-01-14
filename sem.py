@@ -1,5 +1,3 @@
-# standard errors and model fit
-# Bayesian?
 import warnings
 from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
@@ -232,7 +230,7 @@ class SEM(torch.nn.Module):
     def _init_fixed(
         self,
         mapping: Mapping[Union[Tuple[str, str], str], float],
-        **kwargs: Dict[Union[str, Tuple[str, str]], float],
+        **kwargs: Mapping[Union[str, Tuple[str, str]], float],
     ) -> None:
         for name, fixed in kwargs.items():
             mask, constants = _convert_indices(
@@ -273,6 +271,9 @@ class SEM(torch.nn.Module):
 
     @typechecked
     def get(self, name: str) -> torch.Tensor:
+        """
+        Return the requested matrix.
+        """
         assert name in self.variables
 
         # mix of free and fixed variables

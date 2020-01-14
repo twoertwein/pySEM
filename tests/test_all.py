@@ -136,9 +136,9 @@ def test_sem_fiml():
     compare(expected, observed, prefix="SEM_fiml")
 
 
-def test_mlsem(csv="tests/Demo_twolevel.csv", prefix="MLSEM", **kwargs):
+def test_mlsem():
     # mlsem_lavaan/openmx.r
-    sem, data = setup_mlsem(csv)
+    sem, data = setup_mlsem("tests/Demo_twolevel.csv")
     sem.fit()
     observed = sem.summary()
     expected = {
@@ -150,7 +150,7 @@ def test_mlsem(csv="tests/Demo_twolevel.csv", prefix="MLSEM", **kwargs):
         "theta_l2": {("y1", "y1"): 0.058, ("y2", "y2"): 0.120, ("y3", "y3"): 0.149},
         "nu_l2": {("y1", 0): 0.024, ("y2", 0): -0.016, ("y3", 0): -0.042},
     }
-    compare(expected, observed, prefix=prefix, **kwargs)
+    compare(expected, observed, prefix="MLSEM")
 
 
 def test_sem():
