@@ -229,10 +229,24 @@ class SEM(torch.nn.Module):
     @typechecked
     def _init_fixed(
         self,
-        mapping: Mapping[Union[Tuple[str, str], str], float],
+        mapping: Mapping[str, int],
         **kwargs: Mapping[Union[str, Tuple[str, str]], float],
     ) -> None:
         for name, fixed in kwargs.items():
+            # remove duplicated parameters in symmetric matrices
+            if name in ("psi", "theta"):
+                for (name_a, name_b), value in fixed.items():
+                    if value == value:
+                        continue
+                    rank_a = mapping[name_a]
+                    rank_b = mapping[name_b]
+                    if rank_a <= rank_b:
+                        continue
+                    # set coefficient to zero
+                    fixed[name_a, name_b] = 0.0
+                    # and adjust default value
+                    getattr(self, name).data[rank_b, rank_a] *= 2
+
             mask, constants = _convert_indices(
                 fixed, getattr(self, name).shape, mapping
             )
@@ -240,10 +254,7 @@ class SEM(torch.nn.Module):
             self.register_buffer(f"{name}_fixed", constants)
 
             # number of free parameters
-            if name in ("psi", "theta"):
-                free = torch.triu(~mask).sum()
-            else:
-                free = (~mask).sum()
+            free = (~mask).sum()
             self.free_parameters[name] = int(free.item())
 
     @typechecked
