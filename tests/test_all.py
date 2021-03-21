@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 from pytest import approx
 
-from mlsem import MLSEM
-from sem import SEM
+from pySEM.mlsem import MLSEM
+from pySEM.sem import SEM
 
 
 def test_cfa():

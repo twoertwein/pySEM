@@ -9,6 +9,11 @@ The following SEM features are supported:
  * Support for mean structure;
  * Two-level SEM (implemented as described [here](https://doi.org/10.1007/978-0-387-73186-5_12)).
 
+## Installation
+```sh
+poetry add git+https://github.com/twoertwein/pySEM
+```
+
 ## Usage
 To define an SEM, pySEM needs to know which parameters are free and which are fixed to a constant value. A SEM has the following parameters:
 
@@ -30,7 +35,7 @@ A dictionary for each parameter is used to specify which entries are fixed/free 
 Fit the [Holzinger Swineford CFA](http://lavaan.ugent.be/tutorial/cfa.html) and constrain the variance of the factors to be 1 (instead of having one factor loading fixed to 1).
 ```py
 import pandas as pd
-from sem import SEM
+from pySEM.sem import SEM
 
 # get data
 observed = ["x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9"]
@@ -69,12 +74,12 @@ parameters = sem.summary()  # prints a summary and returns a dictionary of DataF
 The [PoliticalDemocracy SEM from Bollen](http://lavaan.ugent.be/tutorial/sem.html) adds regressions between latent variables.
 ```py
 import pandas as pd
-from sem import SEM
+from pySEM.sem import SEM
 
 # get data
 observed = ["x1", "x2", "x3", "y1", "y2", "y3", "y4", "y5", "y6", "y7", "y8"]
 latent = ["ind60", "dem60", "dem65"]
-data = pd.read_csv(csv).loc[:, observed]
+data = pd.read_csv("tests/PoliticalDemocracy.csv").loc[:, observed]
 
 # define SEM
 sem = SEM(
@@ -118,7 +123,7 @@ This [example two-level SEM from lavaan](http://lavaan.ugent.be/tutorial/multile
 ```py
 import numpy as np
 import pandas as pd
-from mlsem import MLSEM
+from pySEM.mlsem import MLSEM
 
 
 # get data
@@ -127,7 +132,7 @@ observed_l2 = ["y1", "y2", "y3", "w1", "w2"]
 cluster = "cluster"
 latent = ["fw", "_x1", "_x2", "_x3"]
 latent_l2 = ["fb", "_w1", "_w2"]
-data = pd.read_csv(tests/Demo_twolevel.csv)
+data = pd.read_csv("tests/Demo_twolevel.csv")
 data = data.loc[:, np.unique(observed + observed_l2 + [cluster])]
 cdata = data.groupby(cluster).mean()
 

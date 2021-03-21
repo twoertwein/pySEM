@@ -16,7 +16,7 @@ import pandas as pd
 import torch
 from typeguard import typechecked
 
-import sem
+from pySEM import sem
 
 
 @typechecked
@@ -151,9 +151,7 @@ class MLSEM(sem.SEM):
 
         # and fixed entries
         locals_ = locals()
-        self._init_fixed(
-            mapping, **{name: locals_[name] for name in self.variables}
-        )
+        self._init_fixed(mapping, **{name: locals_[name] for name in self.variables})
         self.variables = [x[:-3] for x in self.variables] + self.variables
 
         # necessary to invert beta?
