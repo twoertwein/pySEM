@@ -35,7 +35,7 @@ A dictionary for each parameter is used to specify which entries are fixed/free 
 Fit the [Holzinger Swineford CFA](http://lavaan.ugent.be/tutorial/cfa.html) and constrain the variance of the factors to be 1 (instead of having one factor loading fixed to 1).
 ```py
 import pandas as pd
-from pySEM.sem import SEM
+from pysem.sem import SEM
 
 # get data
 observed = ["x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9"]
@@ -74,7 +74,7 @@ parameters = sem.summary()  # prints a summary and returns a dictionary of DataF
 The [PoliticalDemocracy SEM from Bollen](http://lavaan.ugent.be/tutorial/sem.html) adds regressions between latent variables.
 ```py
 import pandas as pd
-from pySEM.sem import SEM
+from pysem.sem import SEM
 
 # get data
 observed = ["x1", "x2", "x3", "y1", "y2", "y3", "y4", "y5", "y6", "y7", "y8"]
@@ -123,7 +123,7 @@ This [example two-level SEM from lavaan](http://lavaan.ugent.be/tutorial/multile
 ```py
 import numpy as np
 import pandas as pd
-from pySEM.mlsem import MLSEM
+from pysem.mlsem import MLSEM
 
 
 # get data

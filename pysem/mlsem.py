@@ -16,7 +16,7 @@ import pandas as pd
 import torch
 from typeguard import typechecked
 
-from pySEM import sem
+from pysem import sem
 
 
 @typechecked
