@@ -6,11 +6,10 @@ authors = ["Torsten Wörtwein <twoertwein@gmail.com>"]
 license = "BSD-3-Claus"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 pandas = "^1.2.3"
 numpy = "^1.20.1"
 torch = "^1.8.0"
-typeguard = "^2.11.1"
 
 [tool.poetry.dev-dependencies]
 pynvim = "^0.4.2"

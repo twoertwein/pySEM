@@ -315,7 +315,7 @@ def setup_sem(csv):
     return sem, data
 
 
-def compare(expected, observed, prefix="", tol=0.0006):
+def compare(expected, observed, prefix="", tol=0.001):
     for key, matrix in expected.items():
         for index, value in matrix.items():
             assert observed[key].loc[index] == approx(

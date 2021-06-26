@@ -1,26 +1,14 @@
 import warnings
-from typing import (
-    Any,
-    Dict,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
 import torch
-from typeguard import typechecked
 
 from pysem import sem
 
 
-@typechecked
-def block_diag(matrices: Sequence[torch.Tensor]) -> torch.Tensor:
+def block_diag(matrices: list[torch.Tensor]) -> torch.Tensor:
     """
     Block diagonal from a list of square matrices that have different shapes.
     https://github.com/yulkang/pylabyk/blob/master/numpytorch.py
@@ -28,7 +16,7 @@ def block_diag(matrices: Sequence[torch.Tensor]) -> torch.Tensor:
     ends = torch.LongTensor([m.shape[0] for m in matrices]).cumsum(0)
 
     block = torch.zeros(
-        (ends[-1], ends[-1]), device=matrices[0].device, dtype=matrices[0].dtype
+        ends[-1], ends[-1], device=matrices[0].device, dtype=matrices[0].dtype
     )
 
     start = 0
@@ -40,20 +28,20 @@ def block_diag(matrices: Sequence[torch.Tensor]) -> torch.Tensor:
 
 
 class MLSEM(sem.SEM):
-    @typechecked
     def __init__(
         self,
-        data: pd.DataFrame = None,
-        cluster: str = "cluster",
-        observed: Sequence[str] = (),
-        observed_l2: Sequence[str] = (),
-        latent_l2: Sequence[str] = (),
-        lambda_y_l2: Optional[Mapping[Tuple[str, str], float]] = None,
-        beta_l2: Optional[MutableMapping[Tuple[str, str], float]] = None,
-        psi_l2: Optional[MutableMapping[Tuple[str, str], float]] = None,
-        theta_l2: Optional[MutableMapping[Tuple[str, str], float]] = None,
-        nu_l2: Optional[MutableMapping[str, float]] = None,
-        alpha_l2: Optional[MutableMapping[str, float]] = None,
+        data: pd.DataFrame,
+        cluster: str,
+        observed: list[str],
+        observed_l2: list[str],
+        latent_l2: list[str],
+        *,
+        lambda_y_l2: Optional[dict[tuple[str, str], float]] = None,
+        beta_l2: Optional[dict[tuple[str, str], float]] = None,
+        psi_l2: Optional[dict[tuple[str, str], float]] = None,
+        theta_l2: Optional[dict[tuple[str, str], float]] = None,
+        nu_l2: Optional[dict[str, float]] = None,
+        alpha_l2: Optional[dict[str, float]] = None,
         biased_cov: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -87,7 +75,6 @@ class MLSEM(sem.SEM):
         super().__init__(data=data, observed=observed, biased_cov=biased_cov, **kwargs)
 
         # validate input
-        assert observed_l2 and latent_l2 and data is not None
         lambda_y_l2, beta_l2, psi_l2, theta_l2, alpha_l2, nu_l2 = sem._default_settings(
             lambda_y_l2,
             beta_l2,
@@ -160,13 +147,12 @@ class MLSEM(sem.SEM):
         # prepare selection matrices
         self._init_selection_matrices()
 
-    @typechecked
     def _init_clusters(
         self,
         data: Optional[np.ndarray] = None,
         clusters: Optional[np.ndarray] = None,
         cluster_vars: int = -1,
-    ) -> Tuple[List[Tuple[slice, List[slice]]], np.ndarray, np.ndarray]:
+    ) -> tuple[list[tuple[slice, list[slice]]], np.ndarray, np.ndarray]:
         # find all missing patterns within clusters and group by the number of
         # missing patterns (for batched inverse and logdet)
         missing_patterns = {}
@@ -185,7 +171,7 @@ class MLSEM(sem.SEM):
             missing_patterns[cluster] = []
             cluster_index = cluster == clusters
 
-            subject_index = np.ones(cluster_index.sum(), dtype=np.bool)
+            subject_index = np.ones(cluster_index.sum(), dtype=bool)
             isnan_ = isnan[cluster_index, :]
             start = start_cluster
             while subject_index.any():
@@ -207,7 +193,6 @@ class MLSEM(sem.SEM):
             start_cluster = start
         return list(missing_patterns.values()), data_, clusters_
 
-    @typechecked
     def _init_selection_matrices(self) -> None:
         # transform between sigma/mu
         pure_l2 = torch.eye(len(self.observed_l2), dtype=torch.double)[
@@ -224,10 +209,9 @@ class MLSEM(sem.SEM):
         self.register_buffer("pure_l1", pure_l1)
         self.register_buffer("pure_l2", pure_l2)
 
-    @typechecked
     def _split(
         self, sigma: torch.Tensor, mu: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Decomposes the between covariances/means into:
         - sigma_b: level-1 variables only
@@ -253,10 +237,7 @@ class MLSEM(sem.SEM):
 
         return (sigma_b, sigma_xx, sigma_yx, mu_b, mu_x)
 
-    @typechecked
-    def forward(self) -> Tuple[torch.Tensor, int]:
-        unstable = 0
-
+    def forward(self) -> torch.Tensor:
         # get sigma/mean or each level
         sigma_w, mu_w = self.implied_sigma_mu()
         sigma_l2, mu_l2 = self.implied_sigma_mu(suffix="_l2")
@@ -274,8 +255,9 @@ class MLSEM(sem.SEM):
         sigma_b_logdet = None
         sigma_b_inv = None
         if not self.naive_implementation:
-            sigma_b_logdet = torch.logdet(sigma_b)
-            sigma_b_inv = torch.inverse(sigma_b)
+            L_sigma_b = torch.linalg.cholesky(sigma_b)
+            sigma_b_logdet = L_sigma_b.diagonal().log().sum() * 2
+            sigma_b_inv = torch.cholesky_inverse(L_sigma_b)
         for cluster_slice, batches in self.missing_patterns:
             # get cluster data and define R_j for current cluster j
             cluster_x = self.data_xs[cluster_slice.start, :]
@@ -285,7 +267,7 @@ class MLSEM(sem.SEM):
             # cache
             key = (
                 tuple(R_j_index.tolist()),
-                tuple([tuple(x) for x in data_ys_available[cluster_slice, :].tolist()]),
+                tuple(tuple(x) for x in data_ys_available[cluster_slice, :].tolist()),
             )
             sigma_j_logdet, sigma_j_inv = cache_S_j_R_j.get(key, (None, None))
 
@@ -314,12 +296,14 @@ class MLSEM(sem.SEM):
                     if S_ij.shape[0] != eye_w.shape[0]:
                         # missing data
                         lambda_ij = S_ij.mm(sigma_w.mm(S_ij.t()))
-                    lambda_ij_inv = torch.inverse(lambda_ij)
-                    lambda_ij_logdet = torch.logdet(lambda_ij)
+
+                    L_lambda_ij = torch.linalg.cholesky(lambda_ij)
+                    lambda_ij_logdet = L_lambda_ij.diagonal().log().sum() * 2
+                    lambda_ij_inv = torch.cholesky_inverse(L_lambda_ij)
 
                     if S_ij.shape[0] != eye_w.shape[0]:
                         # missing data
-                        a_j = S_ij.t().mm(lambda_ij_inv.mm(S_ij))
+                        a_j = S_ij.t().mm(torch.cholesky_solve(S_ij, L_lambda_ij))
                     else:
                         a_j = lambda_ij_inv
                     cache_S_ij[key_S_ij] = lambda_ij_inv, lambda_ij_logdet, a_j
@@ -412,12 +396,13 @@ class MLSEM(sem.SEM):
                         ],
                         dim=1,
                     )
-                sigma_j_logdet = torch.logdet(sigma_j)
-                sigma_j_inv = torch.inverse(sigma_j)
+                L_sigma_j = torch.linalg.cholesky(sigma_j)
+                sigma_j_logdet = L_sigma_j.diagonal().log().sum() * 2
+                sigma_j_inv = torch.cholesky_inverse(L_sigma_j)
+
                 cache_S_j_R_j[key] = (sigma_j_logdet, sigma_j_inv)
 
             loss_current = sigma_j_logdet + torch.trace(sigma_j_inv.mm(G_yj))
-            unstable += loss_current.detach().item() < 0
             loss = loss + loss_current.clamp(min=0.0)
 
-        return loss, unstable
+        return loss

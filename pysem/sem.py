@@ -1,18 +1,15 @@
-import warnings
-from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
 import torch
-from typeguard import typechecked
 
 
-@typechecked
 def _convert_indices(
-    dictionary: Mapping[Union[Tuple[str, str], str], float],
-    shape: Tuple[int, int],
-    mapping: Mapping[str, int],
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    dictionary: dict[Union[tuple[str, str], str], float],
+    shape: tuple[int, int],
+    mapping: dict[str, int],
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Create a mask and matrix from a dictionary."""
     mask = torch.ones(shape, dtype=torch.bool)
     fixed = torch.zeros(shape, dtype=torch.double)
@@ -28,21 +25,19 @@ def _convert_indices(
     return mask, fixed
 
 
-@typechecked
 def _symmetric_dict(
-    dictionary: MutableMapping[Tuple[str, str], float]
-) -> Mapping[Tuple[str, str], float]:
+    dictionary: dict[tuple[str, str], float]
+) -> dict[tuple[str, str], float]:
     """Make a dictionary symmetric."""
     for (i, j), constant in list(dictionary.items()):
         dictionary[j, i] = constant
     return dictionary
 
 
-@typechecked
 def _exclusive_dicts(
-    dict_a: Mapping[Tuple[str, str], float],
-    dict_b: MutableMapping[Tuple[str, str], float],
-) -> Mapping[Tuple[str, str], float]:
+    dict_a: dict[tuple[str, str], float],
+    dict_b: dict[tuple[str, str], float],
+) -> dict[tuple[str, str], float]:
     """Non-zero in A -> 0 in B."""
     for key, value in dict_a.items():
         if value == 0:
@@ -51,24 +46,23 @@ def _exclusive_dicts(
     return dict_b
 
 
-@typechecked
 def _default_settings(
-    lambda_y: Optional[Mapping[Tuple[str, str], float]],
-    beta: Optional[Mapping[Tuple[str, str], float]],
-    psi: Optional[Mapping[Tuple[str, str], float]],
-    theta: Optional[Mapping[Tuple[str, str], float]],
-    alpha: Optional[Mapping[str, float]],
-    nu: Optional[Mapping[str, float]],
-    latent: Sequence[str],
-    observed: Sequence[str],
-) -> (
-    Mapping[Tuple[str, str], float],
-    Mapping[Tuple[str, str], float],
-    Mapping[Tuple[str, str], float],
-    Mapping[Tuple[str, str], float],
-    Mapping[str, float],
-    Mapping[str, float],
-):
+    lambda_y: Optional[dict[tuple[str, str], float]],
+    beta: Optional[dict[tuple[str, str], float]],
+    psi: Optional[dict[tuple[str, str], float]],
+    theta: Optional[dict[tuple[str, str], float]],
+    alpha: Optional[dict[str, float]],
+    nu: Optional[dict[str, float]],
+    latent: list[str],
+    observed: list[str],
+) -> tuple[
+    dict[tuple[str, str], float],
+    dict[tuple[str, str], float],
+    dict[tuple[str, str], float],
+    dict[tuple[str, str], float],
+    dict[str, float],
+    dict[str, float],
+]:
     if lambda_y is None:
         lambda_y = {}
     if beta is None:
@@ -97,10 +91,9 @@ def _default_settings(
     return lambda_y, beta, psi, theta, alpha, nu
 
 
-@typechecked
 def _get_initialized_parameter(
     data: pd.DataFrame, n_observed: int, n_latent: int, biased: bool = False
-) -> Dict[str, torch.nn.Parameter]:
+) -> dict[str, torch.nn.Parameter]:
     """Similar to lavaan's simple."""
     scale = 1.0
     if biased:
@@ -108,11 +101,9 @@ def _get_initialized_parameter(
 
     return {
         "lambda_y": torch.nn.Parameter(
-            torch.ones((n_observed, n_latent), dtype=torch.double)
+            torch.ones(n_observed, n_latent, dtype=torch.double)
         ),
-        "beta": torch.nn.Parameter(
-            torch.zeros((n_latent, n_latent), dtype=torch.double)
-        ),
+        "beta": torch.nn.Parameter(torch.zeros(n_latent, n_latent, dtype=torch.double)),
         "psi": torch.nn.Parameter(torch.eye(n_latent, dtype=torch.double)),
         "theta": torch.nn.Parameter(
             torch.from_numpy(
@@ -121,7 +112,7 @@ def _get_initialized_parameter(
             .double()
             .clamp(min=0.1)
         ),
-        "alpha": torch.nn.Parameter(torch.zeros((n_latent, 1), dtype=torch.double)),
+        "alpha": torch.nn.Parameter(torch.zeros(n_latent, 1, dtype=torch.double)),
         "nu": torch.nn.Parameter(
             torch.from_numpy(data.mean().values[:, None]).double()
         ),
@@ -129,18 +120,18 @@ def _get_initialized_parameter(
 
 
 class SEM(torch.nn.Module):
-    @typechecked
     def __init__(
         self,
-        observed: Sequence[str] = (),
-        latent: Sequence[str] = (),
-        data: Optional[pd.DataFrame] = None,
-        lambda_y: Optional[Mapping[Tuple[str, str], float]] = None,
-        beta: Optional[MutableMapping[Tuple[str, str], float]] = None,
-        psi: Optional[MutableMapping[Tuple[str, str], float]] = None,
-        theta: Optional[MutableMapping[Tuple[str, str], float]] = None,
-        nu: Optional[MutableMapping[str, float]] = None,
-        alpha: Optional[MutableMapping[str, float]] = None,
+        *,
+        observed: list[str],
+        latent: list[str],
+        data: pd.DataFrame,
+        lambda_y: Optional[dict[tuple[str, str], float]] = None,
+        beta: Optional[dict[tuple[str, str], float]] = None,
+        psi: Optional[dict[tuple[str, str], float]] = None,
+        theta: Optional[dict[tuple[str, str], float]] = None,
+        nu: Optional[dict[str, float]] = None,
+        alpha: Optional[dict[str, float]] = None,
         biased_cov: bool = True,
     ) -> None:
         """
@@ -175,7 +166,6 @@ class SEM(torch.nn.Module):
         """
         super().__init__()
         # validate input
-        assert observed and latent and data is not None
         self.fiml = alpha is not None or nu is not None or data.isna().any().any()
         lambda_y, beta, psi, theta, alpha, nu = _default_settings(
             lambda_y, beta, psi, theta, alpha, nu, latent, observed
@@ -214,7 +204,7 @@ class SEM(torch.nn.Module):
             setattr(self, name, parameter)
 
         # and fixed entries
-        self.free_parameters: Dict[str, int] = {}
+        self.free_parameters: dict[str, int] = {}
         locals_ = locals()
         self._init_fixed(mapping, **{name: locals_[name] for name in self.variables})
 
@@ -222,15 +212,14 @@ class SEM(torch.nn.Module):
         self.cfa = self.free_parameters["beta"] == 0
 
         # find all missingness patterns
-        self.missing_patterns: Dict = {}
+        self.missing_patterns: dict = {}
         if self.fiml:
             self.missing_patterns = self._init_fiml()
 
-    @typechecked
     def _init_fixed(
         self,
-        mapping: Mapping[str, int],
-        **kwargs: Mapping[Union[str, Tuple[str, str]], float],
+        mapping: dict[str, int],
+        **kwargs: dict[Union[str, tuple[str, str]], float],
     ) -> None:
         for name, fixed in kwargs.items():
             # remove duplicated parameters in symmetric matrices
@@ -257,12 +246,11 @@ class SEM(torch.nn.Module):
             free = (~mask).sum()
             self.free_parameters[name] = int(free.item())
 
-    @typechecked
-    def _init_fiml(self) -> Dict[int, List[Tuple[torch.Tensor, torch.Tensor]]]:
+    def _init_fiml(self) -> dict[int, list[tuple[torch.Tensor, torch.Tensor]]]:
         # find all missing patterns and group by the number of missing patterns (for
         # batched inverse and logdet)
         data = self.data
-        missing_patterns: Dict[int, List[Tuple[torch.Tensor, torch.Tensor]]] = {}
+        missing_patterns: dict[int, list[tuple[torch.Tensor, torch.Tensor]]] = {}
         index = torch.ones(data.shape[0], dtype=torch.bool)
         isnan = torch.isnan(data)
         while index.any():
@@ -280,7 +268,6 @@ class SEM(torch.nn.Module):
             index = index & ~same_pattern
         return missing_patterns
 
-    @typechecked
     def get(self, name: str) -> torch.Tensor:
         """
         Return the requested matrix.
@@ -303,8 +290,7 @@ class SEM(torch.nn.Module):
 
         return matrix
 
-    @typechecked
-    def summary(self, verbose: bool = True) -> Dict[str, pd.DataFrame]:
+    def summary(self, verbose: bool = True) -> dict[str, pd.DataFrame]:
         """
         Print and return a summary of the estimated parameters.
 
@@ -344,8 +330,7 @@ class SEM(torch.nn.Module):
 
         return results
 
-    @typechecked
-    def fit(self, epochs: int = 20000) -> List[float]:
+    def fit(self, epochs: int = 15_000, lr: float = 0.002) -> list[float]:
         """
         Fit the SEM iteratively.
 
@@ -355,25 +340,17 @@ class SEM(torch.nn.Module):
             List of losses.
 
         """
-        optimizer = torch.optim.Adam(self.parameters())
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         losses = []
         best_loss = np.Inf
         best_loss_counter = 0
         for epoch in range(epochs):
             optimizer.zero_grad()
-            loss, unstable = self.forward()
+            loss = self.forward()
             losses.append(loss.detach().item())
             assert losses[-1] >= 0, f"Loss {loss} in epoch {epoch}"
             loss.backward()
             optimizer.step()
-
-            if unstable > 0:
-                warnings.warn(
-                    f"{unstable} unstable/singular operation(s) during epoch {epoch} ({losses[-1]})"
-                )
-                if losses[-1] == 0:
-                    break
-                continue
 
             # early stopping (best loss has been reached 5 times)
             loss = np.round(losses[-1], 10)
@@ -388,10 +365,9 @@ class SEM(torch.nn.Module):
 
         return losses
 
-    @typechecked
     def implied_sigma_mu(
         self, suffix: str = ""
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Calculate the model-implied covariance and mean."""
         psi = self.get(f"psi{suffix}")
         lambda_y = self.get(f"lambda_y{suffix}")
@@ -416,11 +392,8 @@ class SEM(torch.nn.Module):
 
         return sigma, mu
 
-    @typechecked
-    def forward(self) -> Tuple[torch.Tensor, int]:
+    def forward(self) -> torch.Tensor:
         """Return a value proportional to the log likelihood."""
-        unstable = 0
-
         # model-implied covariance/mean
         sigma, mu = self.implied_sigma_mu()
 
@@ -434,24 +407,23 @@ class SEM(torch.nn.Module):
                 sigmas = torch.stack(
                     [sigma.index_select(0, x[1]).index_select(1, x[1]) for x in pairs]
                 )
-                sigmas_logdet = torch.logdet(sigmas)
-                sigmas = torch.inverse(sigmas)
+                L_sigmas = torch.linalg.cholesky(sigmas)
+                sigmas_logdet = L_sigmas.diagonal(dim1=1, dim2=2).log().sum(dim=1) * 2
 
                 for i, (observations, available) in enumerate(pairs):
                     mean_diff = mean_diffs.index_select(0, observations).index_select(
                         1, available
                     )
                     loss_current = sigmas_logdet[i] * len(observations) + torch.trace(
-                        mean_diff.mm(sigmas[i]).mm(mean_diff.t())
+                        mean_diff.mm(torch.cholesky_solve(mean_diff.t(), L_sigmas[i]))
                     )
-                    unstable += loss_current.detach().item() < 0
                     loss = loss + loss_current.clamp(min=0.0)
 
         else:
             # maximum likelihood
-            loss = torch.logdet(sigma) + torch.trace(
-                self.sample_covariance.mm(torch.inverse(sigma))
+            L_sigma = torch.linalg.cholesky(sigma)
+            loss = L_sigma.diagonal().log().sum() * 2 + torch.trace(
+                torch.cholesky_solve(self.sample_covariance, L_sigma)
             )
-            unstable += loss.detach().item() < 0
 
-        return loss, unstable
+        return loss
