@@ -8,24 +8,6 @@ import torch
 from pysem import sem
 
 
-def block_diag(matrices: list[torch.Tensor]) -> torch.Tensor:
-    """
-    Block diagonal from a list of square matrices that have different shapes.
-    https://github.com/yulkang/pylabyk/blob/master/numpytorch.py
-    """
-    ends = torch.LongTensor([m.shape[0] for m in matrices]).cumsum(0)
-
-    block = torch.zeros(
-        ends[-1], ends[-1], device=matrices[0].device, dtype=matrices[0].dtype
-    )
-
-    start = 0
-    for index, (matrix, end) in enumerate(zip(matrices, ends)):
-        if index != 0:
-            start = ends[index - 1]
-        block[start:end, start:end] = matrix
-    return block
-
 
 class MLSEM(sem.SEM):
     def __init__(
@@ -333,7 +315,7 @@ class MLSEM(sem.SEM):
                 B_j = torch.inverse(sigma_b_inv_A_j)
                 C_j = eye_w - A_j.mm(B_j)
                 D_j = C_j.mm(A_j)
-                lambda_inv = block_diag(lambda_ijs_inv)
+                lambda_inv = torch.block_diag(*lambda_ijs_inv)
                 V_j_inv = lambda_inv - lambda_inv.mm(
                     S_j.mm(B_j.mm(S_j.t().mm(lambda_inv)))
                 )
@@ -382,8 +364,8 @@ class MLSEM(sem.SEM):
 
             elif sigma_j_logdet is None:
                 # naive
-                sigma_j = S_j.mm(sigma_b.mm(S_j.t())) + block_diag(
-                    [S_ij.mm(sigma_w.mm(S_ij.t())) for S_ij in S_ijs]
+                sigma_j = S_j.mm(sigma_b.mm(S_j.t())) + torch.block_diag(
+                    *[S_ij.mm(sigma_w.mm(S_ij.t())) for S_ij in S_ijs]
                 )
                 if not no_cluster:
                     sigma_j_12 = S_j.mm(sigma_yx[:, R_j_index])
