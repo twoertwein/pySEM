@@ -1,6 +1,4 @@
-"""
-Tests whether the output is the same as lavaan's output.
-"""
+"""Tests whether the output is the same as lavaan's output."""
 import numpy as np
 import pandas as pd
 from pytest import approx
@@ -319,7 +317,7 @@ def compare(expected, observed, prefix="", tol=0.001):
     for key, matrix in expected.items():
         for index, value in matrix.items():
             assert observed[key].loc[index] == approx(
-                value, abs=tol
+                value, abs=tol,
             ), f"{prefix} {key} ({index}) is {observed[key].loc[index]} but expected {value}"
 
 

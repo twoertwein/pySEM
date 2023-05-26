@@ -1,4 +1,3 @@
-from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -6,7 +5,7 @@ import torch
 
 
 def _convert_indices(
-    dictionary: dict[Union[tuple[str, str], str], float],
+    dictionary: dict[tuple[str, str] | str, float],
     shape: tuple[int, int],
     mapping: dict[str, int],
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -26,7 +25,7 @@ def _convert_indices(
 
 
 def _symmetric_dict(
-    dictionary: dict[tuple[str, str], float]
+    dictionary: dict[tuple[str, str], float],
 ) -> dict[tuple[str, str], float]:
     """Make a dictionary symmetric."""
     for (i, j), constant in list(dictionary.items()):
@@ -47,12 +46,12 @@ def _exclusive_dicts(
 
 
 def _default_settings(
-    lambda_y: Optional[dict[tuple[str, str], float]],
-    beta: Optional[dict[tuple[str, str], float]],
-    psi: Optional[dict[tuple[str, str], float]],
-    theta: Optional[dict[tuple[str, str], float]],
-    alpha: Optional[dict[str, float]],
-    nu: Optional[dict[str, float]],
+    lambda_y: dict[tuple[str, str], float] | None,
+    beta: dict[tuple[str, str], float] | None,
+    psi: dict[tuple[str, str], float] | None,
+    theta: dict[tuple[str, str], float] | None,
+    alpha: dict[str, float] | None,
+    nu: dict[str, float] | None,
     latent: list[str],
     observed: list[str],
 ) -> tuple[
@@ -92,7 +91,7 @@ def _default_settings(
 
 
 def _get_initialized_parameter(
-    data: pd.DataFrame, n_observed: int, n_latent: int, biased: bool = False
+    data: pd.DataFrame, n_observed: int, n_latent: int, biased: bool = False,
 ) -> dict[str, torch.nn.Parameter]:
     """Similar to lavaan's simple."""
     scale = 1.0
@@ -101,20 +100,20 @@ def _get_initialized_parameter(
 
     return {
         "lambda_y": torch.nn.Parameter(
-            torch.ones(n_observed, n_latent, dtype=torch.double)
+            torch.ones(n_observed, n_latent, dtype=torch.double),
         ),
         "beta": torch.nn.Parameter(torch.zeros(n_latent, n_latent, dtype=torch.double)),
         "psi": torch.nn.Parameter(torch.eye(n_latent, dtype=torch.double)),
         "theta": torch.nn.Parameter(
             torch.from_numpy(
-                (data.cov().abs() * scale / 2.0).values * np.eye(n_observed)
+                (data.cov().abs() * scale / 2.0).values * np.eye(n_observed),
             )
             .double()
-            .clamp(min=0.1)
+            .clamp(min=0.1),
         ),
         "alpha": torch.nn.Parameter(torch.zeros(n_latent, 1, dtype=torch.double)),
         "nu": torch.nn.Parameter(
-            torch.from_numpy(data.mean().values[:, None]).double()
+            torch.from_numpy(data.mean().values[:, None]).double(),
         ),
     }
 
@@ -126,16 +125,15 @@ class SEM(torch.nn.Module):
         observed: list[str],
         latent: list[str],
         data: pd.DataFrame,
-        lambda_y: Optional[dict[tuple[str, str], float]] = None,
-        beta: Optional[dict[tuple[str, str], float]] = None,
-        psi: Optional[dict[tuple[str, str], float]] = None,
-        theta: Optional[dict[tuple[str, str], float]] = None,
-        nu: Optional[dict[str, float]] = None,
-        alpha: Optional[dict[str, float]] = None,
+        lambda_y: dict[tuple[str, str], float] | None = None,
+        beta: dict[tuple[str, str], float] | None = None,
+        psi: dict[tuple[str, str], float] | None = None,
+        theta: dict[tuple[str, str], float] | None = None,
+        nu: dict[str, float] | None = None,
+        alpha: dict[str, float] | None = None,
         biased_cov: bool = True,
     ) -> None:
-        """
-        A SEM solved with gradient-descend.
+        """A SEM solved with gradient-descend.
 
         observed        Name of observed variables.
         latent          Name of latent variables.
@@ -168,7 +166,7 @@ class SEM(torch.nn.Module):
         # validate input
         self.fiml = alpha is not None or nu is not None or data.isna().any().any()
         lambda_y, beta, psi, theta, alpha, nu = _default_settings(
-            lambda_y, beta, psi, theta, alpha, nu, latent, observed
+            lambda_y, beta, psi, theta, alpha, nu, latent, observed,
         )
 
         self.observed = observed
@@ -189,7 +187,7 @@ class SEM(torch.nn.Module):
             samples = data.shape[0]
             sample_covariance = sample_covariance * (samples - 1.0) / samples
         self.register_buffer(
-            "sample_covariance", torch.from_numpy(sample_covariance.values).double()
+            "sample_covariance", torch.from_numpy(sample_covariance.values).double(),
         )
 
         # parameters
@@ -197,7 +195,7 @@ class SEM(torch.nn.Module):
         if self.fiml:
             self.variables += ["alpha", "nu"]
         for name, parameter in _get_initialized_parameter(
-            data, n_observed, n_latent, biased=biased_cov
+            data, n_observed, n_latent, biased=biased_cov,
         ).items():
             if name not in self.variables:
                 continue
@@ -219,7 +217,7 @@ class SEM(torch.nn.Module):
     def _init_fixed(
         self,
         mapping: dict[str, int],
-        **kwargs: dict[Union[str, tuple[str, str]], float],
+        **kwargs: dict[str | tuple[str, str], float],
     ) -> None:
         for name, fixed in kwargs.items():
             # remove duplicated parameters in symmetric matrices
@@ -237,7 +235,7 @@ class SEM(torch.nn.Module):
                     getattr(self, name).data[rank_b, rank_a] *= 2
 
             mask, constants = _convert_indices(
-                fixed, getattr(self, name).shape, mapping
+                fixed, getattr(self, name).shape, mapping,
             )
             self.register_buffer(f"{name}_mask", mask)
             self.register_buffer(f"{name}_fixed", constants)
@@ -263,15 +261,13 @@ class SEM(torch.nn.Module):
                 (
                     torch.nonzero(same_pattern).flatten(),
                     torch.nonzero(~isnan[i, :]).flatten(),
-                )
+                ),
             )
             index = index & ~same_pattern
         return missing_patterns
 
     def get(self, name: str) -> torch.Tensor:
-        """
-        Return the requested matrix.
-        """
+        """Return the requested matrix."""
         assert name in self.variables
 
         # mix of free and fixed variables
@@ -285,14 +281,13 @@ class SEM(torch.nn.Module):
             matrix = matrix.abs()
 
         # symmetric variables
-        if name.startswith("psi") or name.startswith("theta"):
+        if name.startswith(("psi", "theta")):
             matrix = (matrix + matrix.t()) / 2
 
         return matrix
 
     def summary(self, verbose: bool = True) -> dict[str, pd.DataFrame]:
-        """
-        Print and return a summary of the estimated parameters.
+        """Print and return a summary of the estimated parameters.
 
         verbose     Whether to print the summary.
 
@@ -309,7 +304,7 @@ class SEM(torch.nn.Module):
 
             if name.startswith("theta"):
                 columns = index
-            elif name.startswith("beta") or name.startswith("psi"):
+            elif name.startswith(("beta", "psi")):
                 index = columns
             elif name.startswith("nu"):
                 columns = None
@@ -318,10 +313,9 @@ class SEM(torch.nn.Module):
                 columns = None
 
             results[name] = pd.DataFrame(
-                self.get(name).detach().cpu().numpy(), columns=columns, index=index
+                self.get(name).detach().cpu().numpy(), columns=columns, index=index,
             )
 
-        # print
         if verbose:
             for name, value in results.items():
                 print(name, f"({self.free_parameters[name]} free parameter(s))")
@@ -331,8 +325,7 @@ class SEM(torch.nn.Module):
         return results
 
     def fit(self, epochs: int = 15_000, lr: float = 0.002) -> list[float]:
-        """
-        Fit the SEM iteratively.
+        """Fit the SEM iteratively.
 
         epochs      Maximal number of epochs to train for.
 
@@ -366,8 +359,8 @@ class SEM(torch.nn.Module):
         return losses
 
     def implied_sigma_mu(
-        self, suffix: str = ""
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+        self, suffix: str = "",
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """Calculate the model-implied covariance and mean."""
         psi = self.get(f"psi{suffix}")
         lambda_y = self.get(f"lambda_y{suffix}")
@@ -405,17 +398,17 @@ class SEM(torch.nn.Module):
             for pairs in self.missing_patterns.values():
                 # calculate sigma^-1 and logdet(sigma) in batches
                 sigmas = torch.stack(
-                    [sigma.index_select(0, x[1]).index_select(1, x[1]) for x in pairs]
+                    [sigma.index_select(0, x[1]).index_select(1, x[1]) for x in pairs],
                 )
                 L_sigmas = torch.linalg.cholesky(sigmas)
                 sigmas_logdet = L_sigmas.diagonal(dim1=1, dim2=2).log().sum(dim=1) * 2
 
                 for i, (observations, available) in enumerate(pairs):
                     mean_diff = mean_diffs.index_select(0, observations).index_select(
-                        1, available
+                        1, available,
                     )
                     loss_current = sigmas_logdet[i] * len(observations) + torch.trace(
-                        mean_diff.mm(torch.cholesky_solve(mean_diff.t(), L_sigmas[i]))
+                        mean_diff.mm(torch.cholesky_solve(mean_diff.t(), L_sigmas[i])),
                     )
                     loss = loss + loss_current.clamp(min=0.0)
 
@@ -423,7 +416,7 @@ class SEM(torch.nn.Module):
             # maximum likelihood
             L_sigma = torch.linalg.cholesky(sigma)
             loss = L_sigma.diagonal().log().sum() * 2 + torch.trace(
-                torch.cholesky_solve(self.sample_covariance, L_sigma)
+                torch.cholesky_solve(self.sample_covariance, L_sigma),
             )
 
         return loss

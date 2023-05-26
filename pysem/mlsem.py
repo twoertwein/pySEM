@@ -1,12 +1,11 @@
 import warnings
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import torch
 
 from pysem import sem
-
 
 
 class MLSEM(sem.SEM):
@@ -18,17 +17,16 @@ class MLSEM(sem.SEM):
         observed_l2: list[str],
         latent_l2: list[str],
         *,
-        lambda_y_l2: Optional[dict[tuple[str, str], float]] = None,
-        beta_l2: Optional[dict[tuple[str, str], float]] = None,
-        psi_l2: Optional[dict[tuple[str, str], float]] = None,
-        theta_l2: Optional[dict[tuple[str, str], float]] = None,
-        nu_l2: Optional[dict[str, float]] = None,
-        alpha_l2: Optional[dict[str, float]] = None,
+        lambda_y_l2: dict[tuple[str, str], float] | None = None,
+        beta_l2: dict[tuple[str, str], float] | None = None,
+        psi_l2: dict[tuple[str, str], float] | None = None,
+        theta_l2: dict[tuple[str, str], float] | None = None,
+        nu_l2: dict[str, float] | None = None,
+        alpha_l2: dict[str, float] | None = None,
         biased_cov: bool = True,
         **kwargs: Any,
     ) -> None:
-        """
-        Two-level SEM solved with gradient-descend (according to "Multilevel
+        """Two-level SEM solved with gradient-descend (according to "Multilevel
         structural equation modeling", du Toit et al., 2008).
 
         Same arguments as SEM with the following additions/changes:
@@ -90,14 +88,14 @@ class MLSEM(sem.SEM):
         cluster = data[cluster].values
         data = data.loc[:, self.names + self.names_l2].values
         self.missing_patterns, data, cluster = self._init_clusters(
-            data=data, clusters=cluster, cluster_vars=len(self.names_l2)
+            data=data, clusters=cluster, cluster_vars=len(self.names_l2),
         )
         data = pd.DataFrame(data, columns=self.names + self.names_l2)
         self.register_buffer(
-            "data_ys", torch.from_numpy(data.loc[:, self.names].values).double()
+            "data_ys", torch.from_numpy(data.loc[:, self.names].values).double(),
         )
         self.register_buffer(
-            "data_xs", torch.from_numpy(data.loc[:, self.names_l2].values).double()
+            "data_xs", torch.from_numpy(data.loc[:, self.names_l2].values).double(),
         )
 
         # parameters
@@ -131,8 +129,8 @@ class MLSEM(sem.SEM):
 
     def _init_clusters(
         self,
-        data: Optional[np.ndarray] = None,
-        clusters: Optional[np.ndarray] = None,
+        data: np.ndarray | None = None,
+        clusters: np.ndarray | None = None,
         cluster_vars: int = -1,
     ) -> tuple[list[tuple[slice, list[slice]]], np.ndarray, np.ndarray]:
         # find all missing patterns within clusters and group by the number of
@@ -178,10 +176,10 @@ class MLSEM(sem.SEM):
     def _init_selection_matrices(self) -> None:
         # transform between sigma/mu
         pure_l2 = torch.eye(len(self.observed_l2), dtype=torch.double)[
-            torch.BoolTensor([x in self.names_l2 for x in self.observed_l2]), :
+            torch.BoolTensor([x in self.names_l2 for x in self.observed_l2]), :,
         ]
         pure_l1 = torch.zeros(
-            (len(self.observed), len(self.observed_l2)), dtype=torch.double
+            (len(self.observed), len(self.observed_l2)), dtype=torch.double,
         )
         for i, l1 in enumerate(self.observed):
             j = [j for j, l2 in enumerate(self.observed_l2) if l1 == l2]
@@ -192,15 +190,14 @@ class MLSEM(sem.SEM):
         self.register_buffer("pure_l2", pure_l2)
 
     def _split(
-        self, sigma: torch.Tensor, mu: torch.Tensor
+        self, sigma: torch.Tensor, mu: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Decomposes the between covariances/means into:
+        """Decomposes the between covariances/means into:
         - sigma_b: level-1 variables only
         - sigma_xx: level-2 variables only
         - sigma_yx: cov(level-1, level-2)
         - mu_w and mu_b: same dimensions, level-1 variables only
-        - mu_x: level-2 variables only
+        - mu_x: level-2 variables only.
 
         Returns:
             sigma_b, sigma_xx, sigma_yx, mu_b, mu_x
@@ -270,7 +267,7 @@ class MLSEM(sem.SEM):
 
                 key_S_ij = tuple(available.tolist())
                 lambda_ij_inv, lambda_ij_logdet, a_j = cache_S_ij.get(
-                    key_S_ij, (None, None, None)
+                    key_S_ij, (None, None, None),
                 )
 
                 if lambda_ij_inv is None:
@@ -300,10 +297,10 @@ class MLSEM(sem.SEM):
             y_j = torch.cat(
                 [
                     self.data_ys[cluster_slice, :][data_ys_available[cluster_slice, :]][
-                        :, None
+                        :, None,
                     ],
                     cluster_x[R_j_index, None],
-                ]
+                ],
             )
             mu_y = mu_w + mu_b
             mu_j = torch.cat([S_j.mm(mu_y), mu_x[R_j_index]])
@@ -317,30 +314,30 @@ class MLSEM(sem.SEM):
                 D_j = C_j.mm(A_j)
                 lambda_inv = torch.block_diag(*lambda_ijs_inv)
                 V_j_inv = lambda_inv - lambda_inv.mm(
-                    S_j.mm(B_j.mm(S_j.t().mm(lambda_inv)))
+                    S_j.mm(B_j.mm(S_j.t().mm(lambda_inv))),
                 )
 
                 if no_cluster:
                     # no cluster
                     sigma_11_j = V_j_inv
                     sigma_21_j = torch.empty(
-                        0, device=sigma_11_j.device, dtype=sigma_11_j.dtype
+                        0, device=sigma_11_j.device, dtype=sigma_11_j.dtype,
                     )
                     sigma_22_1 = torch.empty(
-                        [0, 0], device=sigma_11_j.device, dtype=sigma_11_j.dtype
+                        [0, 0], device=sigma_11_j.device, dtype=sigma_11_j.dtype,
                     )
                     sigma_22_inv = sigma_21_j
 
                 else:
                     # normal case
                     sigma_22_1 = (sigma_xx - sigma_yx.t().mm(D_j.mm(sigma_yx)))[
-                        R_j_index, :
+                        R_j_index, :,
                     ][:, R_j_index]
                     sigma_22_inv = torch.inverse(sigma_22_1)
                     sigma_jyx = S_j.mm(sigma_yx[:, R_j_index])
                     sigma_11_j = (
                         V_j_inv.mm(
-                            sigma_jyx.mm(sigma_22_inv.mm(sigma_jyx.t().mm(V_j_inv)))
+                            sigma_jyx.mm(sigma_22_inv.mm(sigma_jyx.t().mm(V_j_inv))),
                         )
                         + V_j_inv
                     )
@@ -365,7 +362,7 @@ class MLSEM(sem.SEM):
             elif sigma_j_logdet is None:
                 # naive
                 sigma_j = S_j.mm(sigma_b.mm(S_j.t())) + torch.block_diag(
-                    *[S_ij.mm(sigma_w.mm(S_ij.t())) for S_ij in S_ijs]
+                    *[S_ij.mm(sigma_w.mm(S_ij.t())) for S_ij in S_ijs],
                 )
                 if not no_cluster:
                     sigma_j_12 = S_j.mm(sigma_yx[:, R_j_index])
