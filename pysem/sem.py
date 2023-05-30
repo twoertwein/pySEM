@@ -284,6 +284,11 @@ class SEM(torch.nn.Module):
         if name.startswith(("psi", "theta")):
             matrix = (matrix + matrix.t()) / 2
 
+        # positive diagonal
+        if name.startswith("psi"):
+            eye = torch.eye(matrix.shape[0], device=matrix.device, dtype=matrix.dtype)
+            matrix = matrix * (1 - eye) + matrix.abs() * eye
+
         return matrix
 
     def summary(self, verbose: bool = True) -> dict[str, pd.DataFrame]:
