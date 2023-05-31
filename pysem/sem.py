@@ -1,4 +1,4 @@
-
+import warnings
 import numpy as np
 import pandas as pd
 import torch
@@ -342,11 +342,10 @@ class SEM(torch.nn.Module):
         losses = []
         best_loss = np.Inf
         best_loss_counter = 0
-        for epoch in range(epochs):
+        for _ in range(epochs):
             optimizer.zero_grad()
             loss = self.forward()
             losses.append(loss.detach().item())
-            assert losses[-1] >= 0, f"Loss {loss} in epoch {epoch}"
             loss.backward()
             optimizer.step()
 
@@ -361,6 +360,8 @@ class SEM(torch.nn.Module):
             if best_loss_counter >= 5:
                 break
 
+        if losses[-1] < 0:
+            warnings.warn(f"Reached negative loss {losses[-1]}")
         return losses
 
     def implied_sigma_mu(

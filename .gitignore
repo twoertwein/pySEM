@@ -1,4 +1,5 @@
 .mypy_cache
+poetry.lock
 *.pdf
 *.bak
 __pycache__
